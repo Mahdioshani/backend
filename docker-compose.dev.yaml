@@ -1,0 +1,64 @@
+version: '3.8'
+services:
+  game-backend:
+    build:
+      dockerfile: DevDockerfile
+      context: .
+      args:
+        GITHUB_TOKEN: ${GITHUB_TOKEN}
+    container_name: game-backend
+    restart: always
+    tty: true
+    depends_on:
+      - game-nats
+    env_file:
+      - .env
+    volumes:
+      - ./:/usr/local/game
+      - /usr/local/game/node_modules
+    ports:
+      - '127.0.0.1:3030:3000'
+    networks:
+      - game-network
+
+  game-nats:
+    build:
+      context: .
+      dockerfile: DevDockerfile
+      target: nats-jetstream
+    container_name: game-nats
+    ports:
+      - '4222:4222' # Exposes port 4222 for NATS client connections
+      - '8222:8222' # Exposes port 8222 for the NATS HTTP monitoring endpoint
+    command: >
+      nats-server --port=4222
+                  --name=game-nats
+                  --http_port=8222
+                  --js
+                  --store_dir=/data
+    networks:
+      - game-network
+    volumes:
+      - game-nats-data:/data
+
+  nats-nui:
+    image: ghcr.io/nats-nui/nui
+    container_name: nats-nui
+    restart: always
+    ports:
+      - '31311:31311'
+    environment:
+      - NATS_URL=nats://game-nats:4222
+    networks:
+      - game-network
+    volumes:
+      - nats-nui-data:/db
+
+
+networks:
+  game-network:
+    driver: bridge
+
+volumes:
+  game-nats-data:
+  nats-nui-data:

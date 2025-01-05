@@ -1,0 +1,35 @@
+FROM debian:12.6-slim AS nats-jetstream
+
+RUN apt-get update -y 
+
+RUN apt-get install -y curl
+
+RUN curl -L -o nats-server.deb https://github.com/nats-io/nats-server/releases/download/v2.10.18/nats-server-v2.10.18-amd64.deb
+RUN dpkg -i nats-server.deb
+
+RUN curl -L -o natscli.deb https://github.com/nats-io/natscli/releases/download/v0.1.5/nats-0.1.5-amd64.deb
+RUN dpkg -i natscli.deb
+
+EXPOSE 4222 8222
+
+# Build Dev
+FROM node:20-alpine
+
+RUN apk update
+
+WORKDIR /usr/local/game
+
+COPY package.json .
+
+ARG GITHUB_TOKEN
+
+RUN echo "@PeleyGame:registry=https://npm.pkg.github.com" >> ~/.npmrc
+RUN echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> ~/.npmrc
+
+RUN yarn install
+
+COPY . .
+
+EXPOSE 3000
+
+CMD ["yarn", "run", "start:dev"]
