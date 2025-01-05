@@ -11,6 +11,8 @@ RUN yarn build && cp -r /build/dist/ app
 
 FROM node:20-alpine
 
+RUN mkdir -p /db && chmod 777 /db
+
 USER node
 WORKDIR /app
 COPY --from=builder /build/app ./
