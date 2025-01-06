@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { LudoService } from './ludo.service';
+import { XOService } from './ludo.service';
 import { ConfigService } from '@nestjs/config';
 import { LudoController } from './ludo.controller';
 import { ClientProxyFactory, Transport } from '@nestjs/microservices';
@@ -20,7 +20,7 @@ import { ClientProxyFactory, Transport } from '@nestjs/microservices';
       },
       inject: [ConfigService],
     },
-    LudoService,
+    XOService,
   ],
   controllers: [LudoController],
 })

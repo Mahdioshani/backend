@@ -18,11 +18,11 @@ import { CustomRpcException } from '@app/common/exceptions/custom-rpc.exception'
 import { GameEngineCommandType } from '@PeleyGame/game-engine-sdk';
 
 
-import { LudoService } from './ludo.service';
+import { XOService } from './ludo.service';
 
 @Controller('ludo')
 export class LudoController {
-  constructor(private readonly ludoService: LudoService) { }
+  constructor(private readonly ludoService: XOService) { }
 
   @MessagePattern(
     receiveCommandTopic(GameType.Ludo, GameEngineCommandType.SETUP),

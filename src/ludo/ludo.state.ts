@@ -1,207 +1,310 @@
-import { Exclude, Expose } from "class-transformer";
-import { GameEngineState } from "../common/base/base-game-engine.state";
-import { IPosition, LudoPiece, LudoPlayerState, IMoveOption, pieceStatus, positionType, ILastTurn, IMove } from "./ludo.types";
-
+import {
+  GameResult,
+  PlayerResult,
+  ResultStatus,
+} from '@PeleyGame/game-engine-sdk';
+import { Logger } from '@nestjs/common';
 import * as Chance from 'chance';
-import { Logger } from "@nestjs/common";
-import { GameResult, PlayerResult, ResultStatus } from "@PeleyGame/game-engine-sdk";
+import { Exclude, Expose } from 'class-transformer';
+import { GameEngineState } from '../common/base/base-game-engine.state';
+import {
+  boardStatus,
+  ILastTurn,
+  IMove,
+  turn,
+  XOPlayerState,
+  XOSubBoard,
+} from './ludo.types';
 
-export const staticData = [
-  {
-    startPoint: 0,
-    endPoint: 50,
-  },
-  {
-    startPoint: 13,
-    endPoint: 11,
-  },
-  {
-    startPoint: 26,
-    endPoint: 24,
-  },
-  {
-    startPoint: 39,
-    endPoint: 37,
-  }
-]
+export const posToSubBoardId = {
+  '0,0': 0,
+  '0,1': 1,
+  '0,2': 2,
+  '1,0': 3,
+  '1,1': 4,
+  '1,2': 5,
+  '2,0': 6,
+  '2,1': 7,
+  '2,2': 8,
+};
 
-export const safeZone = [0, 8, 13, 21, 26, 34, 39, 47];
+
+//startttttttttttttttttttttttttttttttttt
 
 @Exclude()
-export class LudoState extends GameEngineState<LudoPlayerState> {
+export class LudoState extends GameEngineState<XOPlayerState> {
   private readonly logger = new Logger(LudoState.name);
   private readonly chance = new Chance();
 
   @Expose({ name: 'last_turn' })
   public LastTurn: Partial<ILastTurn>;
 
-  private continuousSixDiceCount = 0;
+  @Expose({ name: 'sub_boards' })
+  public SubBoards: Array<XOSubBoard>;
+
+  @Expose({ name: 'Conclusion' })
+  public Conclusion: boardStatus;
 
   constructor(matchId: string, playerIds: number[]) {
     super(matchId, playerIds);
     this.LastTurn = {};
+    const temp = new Array<XOSubBoard>(9);
+    for (let i = 0; i < 9; i++) {
+      temp[i] = new XOSubBoard(i, boardStatus.RUNNING);
+    }
+    this.SubBoards = temp;
+    this.Conclusion = boardStatus.RUNNING;
   }
 
-  private isPositionBlocked(position: IPosition, playerState: LudoPlayerState): boolean {
-    // Check if the position is occupied by another piece of the same player
-    const occupyingPiece = playerState.pieces.find(piece =>
-      piece?.position?.type === position?.type && piece?.position?.index === position?.index
-    );
-    if (occupyingPiece) {
-      if (position.type === positionType.MAIN_ROAD && safeZone.includes(position.index)) {
-        return false;
-      }
+  private isPositionEmpty(position: IMove): boolean {
+    const x = position?.xPos;
+    const y = position?.yPos;
+    const occupied = this.SubBoards[position.subBoard_id].table[x][y];
+    return occupied === 'Z';
+  }
 
+  private isValidTurn(position: IMove, player: XOPlayerState): boolean {
+    if (this?.LastTurn?.move?.turn === player?.turn_symbol) {
+      return false;
+    }
+    return true;
+  }
+
+  private isValidSubBoard(position: IMove): boolean {
+    if (!this.LastTurn) {
+      return true;
+    }
+    if (this.SubBoards[position.subBoard_id].status !== 'RUNNING') {
+      return false;
+    }
+    const x = this.LastTurn?.move?.xPos;
+    const y = this.LastTurn?.move?.yPos;
+    const expectedSubBoard: number = posToSubBoardId[x + ',' + y];
+    if (this.SubBoards[position.subBoard_id].id === expectedSubBoard) {
+      return true;
+    }
+    if (this.SubBoards[expectedSubBoard].status !== 'RUNNING') {
       return true;
     }
     return false;
   }
 
-  private calculateWalkedSteps(startPoint: number, currentPoint: number, boardSize: number) {
-    if (currentPoint >= startPoint) {
-      return currentPoint - startPoint
+  private checkSubBoardCondition(subBoard: XOSubBoard) {
+    if (subBoard?.status !== 'RUNNING') {
+      return;
     }
-    else {
-      return (boardSize - startPoint) + currentPoint
-    }
-  }
+    const row1Condition: boolean =
+      subBoard.table[0][0] === subBoard.table[0][1] &&
+      subBoard.table[0][1] === subBoard.table[0][2] &&
+      subBoard.table[0][2] !== 'Z';
+    const row2Condition: boolean =
+      subBoard.table[1][0] === subBoard.table[1][1] &&
+      subBoard.table[1][1] === subBoard.table[1][2] &&
+      subBoard.table[1][2] !== 'Z';
+    const row3Condition: boolean =
+      subBoard.table[2][0] === subBoard.table[2][1] &&
+      subBoard.table[2][1] === subBoard.table[2][2] &&
+      subBoard.table[2][2] !== 'Z';
+    const col1Condition: boolean =
+      subBoard.table[0][0] === subBoard.table[1][0] &&
+      subBoard.table[1][0] === subBoard.table[2][0] &&
+      subBoard.table[2][0] !== 'Z';
+    const col2Condition: boolean =
+      subBoard.table[0][1] === subBoard.table[1][1] &&
+      subBoard.table[1][1] === subBoard.table[2][1] &&
+      subBoard.table[2][1] !== 'Z';
+    const col3Condition: boolean =
+      subBoard.table[0][2] === subBoard.table[1][2] &&
+      subBoard.table[1][2] === subBoard.table[2][2] &&
+      subBoard.table[2][2] !== 'Z';
+    const diag1Condition: boolean =
+      subBoard.table[0][0] === subBoard.table[1][1] &&
+      subBoard.table[1][1] === subBoard.table[2][2] &&
+      subBoard.table[2][2] !== 'Z';
+    const diag2Condition: boolean =
+      subBoard.table[0][2] === subBoard.table[1][1] &&
+      subBoard.table[1][1] === subBoard.table[2][0] &&
+      subBoard.table[2][0] !== 'Z';
 
-  private calculateNewPositionPlayingPieceInMainRoad(start: number, currentPosition: number, steps: number): { position: IPosition, status: pieceStatus } {
-    const mainRoadSteps = 50;
-    const boardSize = 52;
-
-    // Calculate the effective position of the current player on a normalized board
-    const walked = this.calculateWalkedSteps(start, currentPosition, boardSize);
-    // const walked = ((currentPosition - start + mainRoadSteps) % mainRoadSteps) + 1;
-    // Calculate the new position based on the steps 
-    const calNewWalked = (walked + steps);
-
-    if (calNewWalked > mainRoadSteps) {
-      const remainingMove = calNewWalked - mainRoadSteps;
-      if (remainingMove === 6) {
-        return {
-          position: null,
-          status: pieceStatus.WON
-        };
+    if (row1Condition) {
+      if (subBoard.table[0][0] == 'X') {
+        subBoard.status = boardStatus.WINX;
       } else {
-        return {
-          position: {
-            type: positionType.SIDE_ROAD,
-            index: remainingMove - 1
-          },
-          status: pieceStatus.PLAYING
-        }
-      }
-    } else {
-      const actualNewPosition = (currentPosition + steps) % boardSize;
-      return {
-        position: {
-          type: positionType.MAIN_ROAD,
-          index: actualNewPosition
-        },
-        status: pieceStatus.PLAYING
+        subBoard.status = boardStatus.WINO;
       }
     }
-  }
-
-  private calculateNewPositionPlayingPieceInSideRoad(currentPosition: number, steps: number): { position: IPosition, status: pieceStatus } {
-    const calcNewPosition = currentPosition + steps;
-    if (calcNewPosition === 5) {
-      return {
-        position: null,
-        status: pieceStatus.WON
+    if (row2Condition) {
+      if (subBoard.table[1][0] == 'X') {
+        subBoard.status = boardStatus.WINX;
+      } else {
+        subBoard.status = boardStatus.WINO;
       }
-    } else if (calcNewPosition < 5) {
-      return {
-        position: {
-          type: positionType.SIDE_ROAD,
-          index: calcNewPosition,
-        },
-        status: pieceStatus.PLAYING
-      }
-    } else {
-      return null;
     }
-  }
-
-  private calculateMoveOption(piece: LudoPiece, diceValue: number, playerState: LudoPlayerState): IMoveOption | null {
-    const current = {
-      pieceStatus: piece.pieceStatus,
-      position: { ...piece.position },
-    };
-
-    let afterMove: { pieceStatus: pieceStatus; position: IPosition };
-
-    switch (current.pieceStatus) {
-      case pieceStatus.OUT:
-        if (diceValue === 6) {
-          afterMove = {
-            pieceStatus: pieceStatus.PLAYING,
-            position: { type: positionType.MAIN_ROAD, index: playerState.startPoint },
-          };
-        } else {
-          return null;
-        }
-        break;
-
-      case pieceStatus.PLAYING:
-        if (current.position.type === positionType.MAIN_ROAD) {
-          const newPosition = this.calculateNewPositionPlayingPieceInMainRoad(playerState.startPoint, current.position.index, diceValue)
-          afterMove = {
-            pieceStatus: newPosition.status,
-            position: newPosition.position
-          };
-        } else {
-          const newPosition = this.calculateNewPositionPlayingPieceInSideRoad(current.position.index, diceValue)
-          if (!newPosition) {
-            return null;
+    if (row3Condition) {
+      if (subBoard.table[2][0] == 'X') {
+        subBoard.status = boardStatus.WINX;
+      } else {
+        subBoard.status = boardStatus.WINO;
+      }
+    }
+    if (col1Condition) {
+      if (subBoard.table[0][0] == 'X') {
+        subBoard.status = boardStatus.WINX;
+      } else {
+        subBoard.status = boardStatus.WINO;
+      }
+    }
+    if (col2Condition) {
+      if (subBoard.table[0][1] == 'X') {
+        subBoard.status = boardStatus.WINX;
+      } else {
+        subBoard.status = boardStatus.WINO;
+      }
+    }
+    if (col3Condition) {
+      if (subBoard.table[0][2] == 'X') {
+        subBoard.status = boardStatus.WINX;
+      } else {
+        subBoard.status = boardStatus.WINO;
+      }
+    }
+    if (diag1Condition) {
+      if (subBoard.table[0][0] == 'X') {
+        subBoard.status = boardStatus.WINX;
+      } else {
+        subBoard.status = boardStatus.WINO;
+      }
+    }
+    if (diag2Condition) {
+      if (subBoard.table[0][2] == 'X') {
+        subBoard.status = boardStatus.WINX;
+      } else {
+        subBoard.status = boardStatus.WINO;
+      }
+    }
+    if (subBoard?.status === 'RUNNING') {
+      for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) {
+          if (subBoard.table[i][j] === 'Z') {
+            return;
           }
-          afterMove = {
-            pieceStatus: newPosition.status,
-            position: newPosition.position
-          };
         }
-        break;
-
-      case pieceStatus.WON:
-        return null; // Can't move if already won
+      }
     }
-
-    if (afterMove.position && this.isPositionBlocked(afterMove.position, playerState)) {
-      return null;
-    }
-
-    return {
-      pieceId: piece.id,
-      beforeMove: current,
-      afterMove,
-    };
+    subBoard.status = boardStatus.DRAW;
   }
 
+  private checkMainBoardCondition() {
+    const row1Condition: boolean =
+      this.SubBoards[0].status === this.SubBoards[1].status &&
+      this.SubBoards[1].status === this.SubBoards[2].status &&
+      this.SubBoards[2].status !== boardStatus.DRAW &&
+      this.SubBoards[2].status !== boardStatus.RUNNING;
+    const row2Condition: boolean =
+      this.SubBoards[3].status === this.SubBoards[4].status &&
+      this.SubBoards[4].status === this.SubBoards[5].status &&
+      this.SubBoards[5].status !== boardStatus.DRAW &&
+      this.SubBoards[5].status !== boardStatus.RUNNING;
+    const row3Condition: boolean =
+      this.SubBoards[6].status === this.SubBoards[7].status &&
+      this.SubBoards[7].status === this.SubBoards[8].status &&
+      this.SubBoards[8].status !== boardStatus.DRAW &&
+      this.SubBoards[8].status !== boardStatus.RUNNING;
+    const col1Condition: boolean =
+      this.SubBoards[0].status === this.SubBoards[3].status &&
+      this.SubBoards[3].status === this.SubBoards[6].status &&
+      this.SubBoards[6].status !== boardStatus.DRAW &&
+      this.SubBoards[6].status !== boardStatus.RUNNING;
+    const col2Condition: boolean =
+      this.SubBoards[1].status === this.SubBoards[4].status &&
+      this.SubBoards[4].status === this.SubBoards[7].status &&
+      this.SubBoards[7].status !== boardStatus.DRAW &&
+      this.SubBoards[7].status !== boardStatus.RUNNING;
+    const col3Condition: boolean =
+      this.SubBoards[2].status === this.SubBoards[5].status &&
+      this.SubBoards[5].status === this.SubBoards[8].status &&
+      this.SubBoards[8].status !== boardStatus.DRAW &&
+      this.SubBoards[8].status !== boardStatus.RUNNING;
+    const diag1Condition: boolean =
+      this.SubBoards[0].status === this.SubBoards[4].status &&
+      this.SubBoards[4].status === this.SubBoards[8].status &&
+      this.SubBoards[8].status !== boardStatus.DRAW &&
+      this.SubBoards[8].status !== boardStatus.RUNNING;
+    const diag2Condition: boolean =
+      this.SubBoards[2].status === this.SubBoards[4].status &&
+      this.SubBoards[4].status === this.SubBoards[6].status &&
+      this.SubBoards[6].status !== boardStatus.DRAW &&
+      this.SubBoards[6].status !== boardStatus.RUNNING;
 
-  private resultPoint(status: ResultStatus) {
-    const playersCount = this.players.length;
-
-    if (status !== ResultStatus.WON) {
-      return 0.25;
+    if (row1Condition) {
+      if (this.SubBoards[0].status === boardStatus.WINX) {
+        this.Conclusion = boardStatus.WINX;
+      } else {
+        this.Conclusion = boardStatus.WINO;
+      }
     }
-    switch (playersCount) {
-      case 2:
-        return 1;
-      case 3:
-        return 2;
-      case 4:
-        return 3;
-      default:
-        return 0;
+    if (row2Condition) {
+      if (this.SubBoards[4].status === boardStatus.WINX) {
+        this.Conclusion = boardStatus.WINX;
+      } else {
+        this.Conclusion = boardStatus.WINO;
+      }
     }
+    if (row3Condition) {
+      if (this.SubBoards[7].status === boardStatus.WINX) {
+        this.Conclusion = boardStatus.WINX;
+      } else {
+        this.Conclusion = boardStatus.WINO;
+      }
+    }
+    if (col1Condition) {
+      if (this.SubBoards[0].status === boardStatus.WINX) {
+        this.Conclusion = boardStatus.WINX;
+      } else {
+        this.Conclusion = boardStatus.WINO;
+      }
+    }
+    if (col2Condition) {
+      if (this.SubBoards[1].status === boardStatus.WINX) {
+        this.Conclusion = boardStatus.WINX;
+      } else {
+        this.Conclusion = boardStatus.WINO;
+      }
+    }
+    if (col3Condition) {
+      if (this.SubBoards[2].status === boardStatus.WINX) {
+        this.Conclusion = boardStatus.WINX;
+      } else {
+        this.Conclusion = boardStatus.WINO;
+      }
+    }
+    if (diag1Condition) {
+      if (this.SubBoards[0].status === boardStatus.WINX) {
+        this.Conclusion = boardStatus.WINX;
+      } else {
+        this.Conclusion = boardStatus.WINO;
+      }
+    }
+    if (diag2Condition) {
+      if (this.SubBoards[2].status === boardStatus.WINX) {
+        this.Conclusion = boardStatus.WINX;
+      } else {
+        this.Conclusion = boardStatus.WINO;
+      }
+    }
+    if (this.Conclusion === 'RUNNING') {
+      for (let i = 0; i < 9; i++) {
+        if (this.SubBoards[i].status === 'RUNNING') {
+          return;
+        }
+      }
+    }
+    this.Conclusion = boardStatus.DRAW;
   }
 
   public calculateGameResult(): GameResult {
-    let position = 0;
-
-    const activePlayers: LudoPlayerState[] = [];
-    const leftPlayers: LudoPlayerState[] = [];
+    const activePlayers: XOPlayerState[] = [];
+    const leftPlayers: XOPlayerState[] = [];
     for (const player of this.players) {
       if (!player.isLeftTheGame) {
         activePlayers.push(player);
@@ -209,303 +312,174 @@ export class LudoState extends GameEngineState<LudoPlayerState> {
         leftPlayers.push(player);
       }
     }
-
-    const sortedActivePlayers = activePlayers.sort(
-      (a, b) => {
-        const value1 = b.pieces.filter(piece => piece.pieceStatus === pieceStatus.WON).length;
-        const value2 = a.pieces.filter(piece => piece.pieceStatus === pieceStatus.WON).length
-        return value1 - value2;
-      }
-    );
-
     const playerResult = [];
-    for (const player of sortedActivePlayers) {
-      position += 1;
-      const status = player.playerId === sortedActivePlayers[0].playerId ? ResultStatus.WON : ResultStatus.LOST;
-      const point = this.resultPoint(status);
+    if (activePlayers.length == 2) {
+      if (this.Conclusion === boardStatus.DRAW) {
+        playerResult.push(
+          new PlayerResult(
+            activePlayers[0].playerId,
+            0,
+            1,
+            ResultStatus.NOT_SCORED,
+          ),
+        );
+        playerResult.push(
+          new PlayerResult(
+            activePlayers[1].playerId,
+            0,
+            1,
+            ResultStatus.NOT_SCORED,
+          ),
+        );
+      }
+      if (this.Conclusion === boardStatus.WINX) {
+        if (activePlayers[0].turn_symbol === 'X') {
+          playerResult.push(
+            new PlayerResult(activePlayers[0].playerId, 1, 1, ResultStatus.WON),
+          );
+          playerResult.push(
+            new PlayerResult(
+              activePlayers[1].playerId,
+              -1,
+              2,
+              ResultStatus.LOST,
+            ),
+          );
+        } else {
+          playerResult.push(
+            new PlayerResult(activePlayers[1].playerId, 1, 1, ResultStatus.WON),
+          );
+          playerResult.push(
+            new PlayerResult(
+              activePlayers[0].playerId,
+              -1,
+              2,
+              ResultStatus.LOST,
+            ),
+          );
+        }
+      } else {
+        if (activePlayers[0].turn_symbol === 'O') {
+          playerResult.push(
+            new PlayerResult(activePlayers[0].playerId, 1, 1, ResultStatus.WON),
+          );
+          playerResult.push(
+            new PlayerResult(
+              activePlayers[1].playerId,
+              -1,
+              2,
+              ResultStatus.LOST,
+            ),
+          );
+        } else {
+          playerResult.push(
+            new PlayerResult(activePlayers[1].playerId, 1, 1, ResultStatus.WON),
+          );
+          playerResult.push(
+            new PlayerResult(
+              activePlayers[0].playerId,
+              -1,
+              2,
+              ResultStatus.LOST,
+            ),
+          );
+        }
+      }
+    } else if (activePlayers.length === 1) {
+      playerResult.push(
+        new PlayerResult(activePlayers[0].playerId, 1, 1, ResultStatus.WON),
+      );
       playerResult.push(
         new PlayerResult(
-          player.playerId,
-          point,
-          position,
-          status
+          leftPlayers[0].playerId,
+          -1,
+          2,
+          ResultStatus.ABANDONED,
         ),
       );
-    }
-
-    for (const player of leftPlayers) {
-      position += 1;
-      const point = this.resultPoint(ResultStatus.LEFT);
+    } else {
       playerResult.push(
-        new PlayerResult(player.playerId, point, position, ResultStatus.LEFT),
+        new PlayerResult(leftPlayers[1].playerId, 0, 1, ResultStatus.ABANDONED),
+      );
+      playerResult.push(
+        new PlayerResult(leftPlayers[0].playerId, 0, 1, ResultStatus.ABANDONED),
       );
     }
 
     return new GameResult(playerResult);
   }
 
-  public getPiecesOfPosition(position: IPosition): { playerId: number, pieceId: number }[] {
-    const result: { playerId: number, pieceId: number }[] = this.players.reduce((acc, player) => {
-      const pieces = player.pieces.filter(piece => {
-        if (piece.position?.type === position.type && piece.position?.index === position.index) {
-          return true;
+  public initPlayers(playerIds: number[]): XOPlayerState[] {
+    if (playerIds.length !== 2) {
+      throw new Error('Invalid number of ids');
+    }
+    const players: XOPlayerState[] = [];
+    players.push(new XOPlayerState(playerIds[0], turn.X));
+    players.push(new XOPlayerState(playerIds[1], turn.O));
+    return players;
+  }
+  public updateTurn() {
+    if(!this.LastTurn){
+      return this.players[0].playerId
+    }
+    for (const player of this.players) {
+      if (player.playerId!==this.LastTurn.playerId)
+      {
+           return player.playerId;
+      }
+    }
+  }
+  public handleMove(move: IMove): {
+    has_error: boolean;
+    error: string;
+    playerId: number;
+    updated_tables: XOSubBoard[];
+    conclusion: boardStatus;
+    move:IMove;
+  } {
+    const firstError: boolean = this.isPositionEmpty(move);
+    const secondError: boolean = this.isValidSubBoard(move);
+    let error: string = '';
+    const no_error: boolean = firstError && secondError;
+    if (!firstError) {
+      error = 'The position is not empty';
+    }
+    if (!secondError) {
+      error = 'Invalid SubBoard';
+    }
+    let this_playerId: number;
+    if (no_error) {
+      if (move.turn === turn.X) {
+        for (let i = 0; i < this.players.length; i++) {
+          if (this.players[i].turn_symbol !== 'O') {
+            this_playerId = this.players[i].playerId;
+          }
         }
-        return false;
-      })
-      if (pieces.length > 0) {
-        acc.push(...pieces.map(piece => ({ playerId: player.playerId, pieceId: piece.id })))
       }
-      return acc;
-    }, [])
-    return result;
-  }
-
-  public checkWon(playerId: number): boolean {
-    const player = this.players.find(player => player.playerId === playerId);
-    if (!player) {
-      throw new Error(`Player with ID ${playerId} not found`);
-    }
-
-    return player.pieces.every(piece => piece.pieceStatus === pieceStatus.WON);
-  }
-
-  public getPieceOfPlayer(playerId: number, pieceId: number): LudoPiece {
-    const player = this.players.find(player => player.playerId === playerId);
-    if (!player) {
-      throw new Error(`Player with ID ${playerId} not found`);
-    }
-    const piece = player.pieces.find(p => p.id === pieceId);
-    if (!piece) {
-      throw new Error(`Piece with ID ${pieceId} not found`);
-    }
-    return piece;
-  }
-
-  public initPlayers(playerIds: number[]): LudoPlayerState[] {
-    let _staticData = staticData;
-    if (playerIds.length === 2) {
-      _staticData = [staticData[0], staticData[2]];
-    }
-    const result = playerIds.reverse().map((playerId, playerIndex) => {
-
-      const { endPoint, startPoint } = _staticData[playerIndex];
-      // create pieces
-      const _pieces = [1, 2, 3, 4].map((pieceIndex: number) => {
-        return new LudoPiece(pieceIndex, pieceStatus.OUT, null)
-      });
-      return new LudoPlayerState(
-        playerId,
-        startPoint,
-        endPoint,
-        _pieces
-      );
-    });
-    return result;
-  }
-
-  private findNextPlayerIndex(currentPlayerIndex: number): number {
-    let nextPlayerIndex = currentPlayerIndex;
-    do {
-      nextPlayerIndex = (nextPlayerIndex + 1) % this.players.length;
-      if (!this.players[nextPlayerIndex].isLeftTheGame) {
-        return nextPlayerIndex;
-      }
-    } while (nextPlayerIndex !== currentPlayerIndex);
-
-    return -1;
-  }
-
-  public updateTurn(hasPrize?: boolean) {
-    this.LastTurn.turnCount = this.LastTurn.turnCount ? this.LastTurn.turnCount + 1 : 1;
-    this.LastTurn.step = "ROLL_DICE";
-    if (!this?.LastTurn?.playerId) {
-      const indexRandomUser = Math.floor(Math.random() * this.players.length);
-      this.LastTurn.playerId = this.players[indexRandomUser].playerId;
-    }
-    if (this.LastTurn.diceValue === 6 && this.continuousSixDiceCount >= 3) {
-      this.continuousSixDiceCount = 0;
-    }
-    else if (this.LastTurn.diceValue === 6) {
-      return this.LastTurn.playerId;
-    }
-    if (hasPrize) {
-      return this.LastTurn.playerId;
-    }
-
-    const currentPlayerIndex = this.players.findIndex(player => player.playerId === this.LastTurn.playerId);
-    const nextPlayerIndex = this.findNextPlayerIndex(currentPlayerIndex);
-    // const nextPlayerIndex = (
-    //   this.players.length +
-    //   this.players.findIndex(player => player.playerId === this.LastTurn.playerId) + 1)
-    //   % this.players.length;
-    const nextPlayerId = this.players[nextPlayerIndex].playerId;
-    this.LastTurn.playerId = nextPlayerId;
-    return nextPlayerId;
-
-  }
-
-  public rollDice(playerId: number, diceValue?: number) {
-
-    const player = this.players.find(player => player.playerId === playerId);
-    let _diceValue = diceValue;
-
-    if (!_diceValue && player.pieces.every(piece => piece.pieceStatus === pieceStatus.OUT)) {
-      console.log("NEW ROLL");
-      const baseProbability = 1 / 6; // Standard dice probability
-      const maxProbabilityBoost = 0.5; // Maximum probability boost
-      const probabilityIncreaseRate = 0.05; // Probability increase per non-6 roll
-
-      // Calculate boosted probability
-      const probabilityBoost = Math.min(
-        maxProbabilityBoost,
-        player.consecutiveNonSixRolls * probabilityIncreaseRate
-      );
-
-      const adjustedProbability = baseProbability + probabilityBoost;
-
-      _diceValue = this.chance.floating({
-        min: 0,
-        max: 1
-      }) < adjustedProbability ? 6 : this.chance.d6();
-    } else if (!_diceValue) {
-      console.log("OLD ROLL");
-      _diceValue = this.chance.d6();
-    }
-
-    if (_diceValue === 6 && this.continuousSixDiceCount + 1 >= 3) {
-      this.continuousSixDiceCount += 1;
-      player.consecutiveNonSixRolls = 0;
-      this.LastTurn.diceValue = 6;
-      this.LastTurn.options = [];
-      this.LastTurn.playerId = playerId;
-      return {
-        diceValue: _diceValue,
-        playerId,
-        options: [],
-        continuousSixDiceCount: 3
-      };
-
-    }
-
-    if (_diceValue === 6) {
-      player.consecutiveNonSixRolls = 0;
-      this.continuousSixDiceCount += 1;
     } else {
-      player.consecutiveNonSixRolls += 1;
-      this.continuousSixDiceCount = 0;
-    }
+      if (move.turn === turn.O) {
+        for (let i = 0; i < this.players.length; i++) {
+          if (this.players[i].turn_symbol !== 'X') {
 
-    const options: IMoveOption[] = [];
-    const playerState = this.players.find(player => player.playerId === playerId);
-
-    playerState.pieces.forEach((piece) => {
-      const moveOption = this.calculateMoveOption(piece, _diceValue, playerState);
-      if (moveOption) {
-        options.push(moveOption);
+            this_playerId = this.players[i].playerId;
+          }
+        }
       }
-    });
-    this.LastTurn.diceValue = _diceValue;
-    this.LastTurn.options = options;
-    if (options.length) {
-      this.LastTurn.step = "MOVE_PIECE";
     }
+    const x = move.xPos;
+    const y = move.yPos;
+    this.SubBoards[move.subBoard_id].table[x][y] = move.turn;
+    this.checkSubBoardCondition(this.SubBoards[move.subBoard_id]);
+    this.checkMainBoardCondition();
+    this.LastTurn = { playerId: this_playerId, move: move };
+
     return {
-      diceValue: _diceValue,
-      playerId,
-      options,
-      continuousSixDiceCount: this.continuousSixDiceCount
+      error: error,
+      playerId: this.updateTurn(),
+      has_error: !no_error,
+      updated_tables: this.SubBoards,
+      conclusion: this.Conclusion,
+      move:move
     };
-  }
-
-  public movePiece(playerId: number, pieceId: number): {
-    playerId: number,
-    pieceId: number,
-    move: IMove
-  } {
-    if (!this.LastTurn.diceValue) {
-      throw new Error('Dice must be rolled before moving a piece');
-    }
-    const playerState = this.players.find((player) => player.playerId === playerId);
-    if (!playerState) {
-      throw new Error(`Player with ID ${playerId} not found`);
-    }
-    const moveOption = this.LastTurn.options.find(option => option.pieceId === pieceId);
-    if (!moveOption) {
-      throw new Error(`Invalid move for piece ${pieceId}`);
-    }
-
-    const piece = playerState.pieces.find(p => p.id === pieceId);
-    if (!piece) {
-      throw new Error(`Piece with ID ${pieceId} not found`);
-    }
-
-    // Update the piece's status and position
-    piece.pieceStatus = moveOption.afterMove.pieceStatus;
-    piece.position = moveOption.afterMove.position;
-    const move: IMove = {
-      afterMove: moveOption.afterMove,
-      beforeMove: moveOption.beforeMove,
-    }
-    // TODO set interface for result 
-    return {
-      playerId,
-      pieceId,
-      move
-    }
-  }
-
-  public resetAllPlayerPiece(playerId: number) {
-    const player = this.players.find(player => player.playerId === playerId);
-    if (!player) {
-      this.logger.error("player not found in this match")
-      return;
-    }
-    // update all piece
-    player.pieces.forEach(piece => {
-      piece.pieceStatus = pieceStatus.OUT;
-      piece.position = null;
-    })
-
-    return player
-  }
-
-  public movePieceTo(playerId: number, pieceId: number, pieceStatus: pieceStatus, piecePosition: IPosition): {
-    playerId: number,
-    pieceId: number,
-    move: IMove
-  } {
-    const playerState = this.players.find((player) => player.playerId === playerId);
-    if (!playerState) {
-      throw new Error(`Player with ID ${playerId} not found`);
-    }
-    const piece = playerState.pieces.find(p => p.id === pieceId);
-    if (!piece) {
-      throw new Error(`Piece with ID ${pieceId} not found`);
-    }
-    if (piecePosition?.type === positionType?.MAIN_ROAD && piecePosition.index > 51) {
-      throw new Error(`move is not valid`);
-    }
-    if (piecePosition?.type === positionType?.SIDE_ROAD && piecePosition.index > 5) {
-      throw new Error(`move is not valid`);
-    }
-    const move: IMove = {
-      afterMove: {
-        pieceStatus: pieceStatus,
-        position: piecePosition,
-      },
-      beforeMove: {
-        pieceStatus: piece.pieceStatus,
-        position: piece.position
-      }
-    }
-
-    piece.pieceStatus = pieceStatus;
-    piece.position = piecePosition;
-    // TODO set interface for result 
-    return {
-      playerId,
-      pieceId,
-      move
-    }
   }
 }
