@@ -12,7 +12,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { BaseGameEngineService } from '../common/base/base-game-engine.service';
-import './ludo.action';
+import {XO_UPDATE_TUNE} from './ludo.action';
 import {
   ReconnectEvent,
   TUNE_UPDATED_EVENT,
@@ -22,7 +22,7 @@ import { LudoState, posToSubBoardId } from './ludo.state';
 import { IMove, turn } from './ludo.types';
 
 export class XOService extends BaseGameEngineService<LudoState> {
-  private readonly TURN_TIMEOUT = 60000;
+  private readonly TURN_TIMEOUT = 5000;
 
   private readonly logger = new Logger(XOService.name);
   games: Map<string, LudoState> = new Map();
@@ -60,6 +60,7 @@ export class XOService extends BaseGameEngineService<LudoState> {
   }
 
   async startGame(matchId: string, state: LudoState) {
+    await this.handleTurnTimeout(matchId, state.players[0].playerId);
     state = new LudoState(matchId, [100, 200]);
     if (state.players) {
       return;
@@ -100,6 +101,7 @@ export class XOService extends BaseGameEngineService<LudoState> {
       player,
       state.getStateVersion(),
     );
+    console.log("helloooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo");
     this.publishServerEvent(
       matchId,
       GameEngineEventType.MATCH_EVENT,
@@ -369,12 +371,16 @@ export class XOService extends BaseGameEngineService<LudoState> {
   // }
 
   public async processUserAction(
-    payload: PlayerActionCommandPRCPayload<any>,
+    // payload: PlayerActionCommandPRCPayload<any>,
+    payload : any, 
   ): Promise<PlayerActionCommandPRCResponse> {
-    const { matchId, playerId, actionName, data } = payload;
-
+    const { matchId, playerId, actionName, body } = payload;
     const state = this.games.get(matchId);
     if (!state) {
+      console.log(matchId);
+      for (let game in this.games.keys){
+        console.log(this.games[game].matchId);
+      }
       throw new NotFoundException('game is not found');
     }
 
@@ -383,8 +389,15 @@ export class XOService extends BaseGameEngineService<LudoState> {
     }
     // TODO check acceptable action
     switch (actionName) {
-      case TUNE_UPDATED_EVENT: {
-        await this.updateTune(state, data.move);
+      case XO_UPDATE_TUNE: {
+        console.log("==========>;jawnvipanvjasvhbasdjgn", body);
+        const move : IMove = {
+          subBoard_id : body.subBoard_id,
+          xPos : body.xPos,
+          yPos : body.yPos,
+          turn : body.turn
+        }
+        await this.updateTune(state, move);
         if (state.Conclusion !== 'RUNNING') {
           await this.baseEndTheMatch(state.id);
         }
@@ -394,6 +407,7 @@ export class XOService extends BaseGameEngineService<LudoState> {
       success: true,
     };
   }
+  
 
   public async leftPlayer(
     cmd: PlayerLeftCommandPRCPayload,

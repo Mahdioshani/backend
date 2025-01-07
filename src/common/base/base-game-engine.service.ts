@@ -65,6 +65,7 @@ export abstract class BaseGameEngineService<State extends GameEngineState> {
 
   public async baseSetupGame(payload: GameSetupCommandPRCPayload): Promise<GameSetupCommandPRCResponse> {
     const { matchId, playerIds } = payload;
+    console.log("====================================================================", payload)
     const state = this.initSetupTheGameState(matchId, playerIds);
 
     this.games.set(matchId, state);

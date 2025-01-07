@@ -79,10 +79,15 @@ export class LudoState extends GameEngineState<XOPlayerState> {
     }
     const x = this.LastTurn?.move?.xPos;
     const y = this.LastTurn?.move?.yPos;
-    const expectedSubBoard: number = posToSubBoardId[x + ',' + y];
+    const expectedSubBoard: number = x * 3 + y;
+    if (!expectedSubBoard){
+      return true;
+    }
     if (this.SubBoards[position.subBoard_id].id === expectedSubBoard) {
       return true;
     }
+    console.log(expectedSubBoard);
+    console.log(this.SubBoards);
     if (this.SubBoards[expectedSubBoard].status !== 'RUNNING') {
       return true;
     }
