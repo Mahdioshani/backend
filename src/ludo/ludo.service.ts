@@ -394,6 +394,7 @@ export class XOService extends BaseGameEngineService<LudoState> {
     }
 
     if (state.LastTurn.playerId === playerId) {
+      console.log("mannn koskholam");
       throw new NotAcceptableException('It is not your turn');
     }
     // TODO check acceptable action
@@ -401,7 +402,7 @@ export class XOService extends BaseGameEngineService<LudoState> {
       switch (actionName) {
         case XO_UPDATE_TUNE: {
           console.log("==========>;jawnvipanvjasvhbasdjgn", data);
-          console.log(":::::::::::::::", payload)
+          console.log(":::::::::::::::", payload);
           const move : IMove = {
             subBoard_id : data.subBoard_id,
             xPos : data.xPos,

@@ -199,6 +199,9 @@ export class LudoState extends GameEngineState<XOPlayerState> {
         }
       }
     }
+    else{
+      return;
+    }
     subBoard.status = boardStatus.DRAW;
   }
 
@@ -306,6 +309,9 @@ export class LudoState extends GameEngineState<XOPlayerState> {
           return;
         }
       }
+    }
+    else{
+      return;
     }
     this.Conclusion = boardStatus.DRAW;
   }
@@ -426,17 +432,29 @@ export class LudoState extends GameEngineState<XOPlayerState> {
     players.push(new XOPlayerState(playerIds[1], turn.O));
     return players;
   }
+  // public updateTurn() {
+  //   if(!this.LastTurn.playerId){
+  //     return this.players[0].playerId
+  //   }
+  //   for (const player of this.players) {
+  //     if (player.playerId!==this.LastTurn.playerId)
+  //     {
+  //          return player.playerId;
+  //     }
+  //   }
+  // }
   public updateTurn() {
-    if(!this.LastTurn){
-      return this.players[0].playerId
+    if (!this.LastTurn || !('playerId' in this.LastTurn)) {
+      return this.players[0].playerId;
     }
+    
     for (const player of this.players) {
-      if (player.playerId!==this.LastTurn.playerId)
-      {
-           return player.playerId;
+      if (player.playerId !== this.LastTurn.playerId) {
+        return player.playerId;
       }
     }
   }
+  
   public handleMove(move: IMove): {
     has_error: boolean;
     error: string[];
@@ -458,23 +476,7 @@ export class LudoState extends GameEngineState<XOPlayerState> {
     }
     let this_playerId: number;
     if (no_error) {
-      if (move.turn === turn.X) {
-        for (let i = 0; i < this.players.length; i++) {
-          if (this.players[i].turn_symbol !== 'O') {
-            this_playerId = this.players[i].playerId;
-          }
-        }
-
-      }
-    } else {
-      if (move.turn === turn.O) {
-        for (let i = 0; i < this.players.length; i++) {
-          if (this.players[i].turn_symbol !== 'X') {
-
-            this_playerId = this.players[i].playerId;
-          }
-        }
-      }
+      this_playerId = this.players.find(player => player.turn_symbol === move.turn)?.playerId;
     }
     const x = move.xPos;
     const y = move.yPos;
@@ -488,7 +490,7 @@ export class LudoState extends GameEngineState<XOPlayerState> {
 
     return {
       error: error,
-      playerId: this.updateTurn(),
+      playerId: no_error ? this.updateTurn() : this_playerId,
       has_error: !no_error,
       updated_tables: this.SubBoards,
       conclusion: this.Conclusion,
