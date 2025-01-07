@@ -31,6 +31,7 @@ export class XOService extends BaseGameEngineService<LudoState> {
   minimumPlayers: number = 2;
 
   private startTurnTimer(matchId: string, playerId: number) {
+    console.log("StarrrtinnnggggTuurrrnTiiimmeerrr");
     this.clearTurnTimer(matchId);
     const timer = setTimeout(() => {
       this.handleTurnTimeout(matchId, playerId);
@@ -89,11 +90,14 @@ export class XOService extends BaseGameEngineService<LudoState> {
 
   private async handleTurnTimeout(matchId: string, playerId: number) {
     const state = this.games.get(matchId);
-    if (!state || state.LastTurn.playerId !== playerId) {
+    console.log("helloooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo", playerId);
+    console.log(".....................................................",state.LastTurn)
+    if (!state || !state.LastTurn.playerId) {
       return;
     }
     const player = state.players.find((player) => player.playerId === playerId);
     player.faultCount += 1;
+    console.log("Playerrrrrrrffauuuualllltcooouuuunttt", player.faultCount)
     // Publish turn timeout event
     const timeoutEvent = new GameEvent(
       matchId,
@@ -101,7 +105,6 @@ export class XOService extends BaseGameEngineService<LudoState> {
       player,
       state.getStateVersion(),
     );
-    console.log("helloooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo");
     this.publishServerEvent(
       matchId,
       GameEngineEventType.MATCH_EVENT,
@@ -120,7 +123,9 @@ export class XOService extends BaseGameEngineService<LudoState> {
   }
 
   private async updateTune(state: LudoState, move: IMove | undefined) {
+    console.log("UPdating tuneee000000000000000000000000000000000");
     const currentTurnPlayerId = state.handleMove(move);
+    
     const event = new GameEvent(
       state.id,
       TUNE_UPDATED_EVENT,
@@ -131,7 +136,9 @@ export class XOService extends BaseGameEngineService<LudoState> {
     this.publishServerEvent(state.id, GameEngineEventType.MATCH_EVENT, event);
 
     // Start the timer for the new turn
-    this.startTurnTimer(state.id, currentTurnPlayerId.playerId);
+    // if (!currentTurnPlayerId.has_error){
+    //   this.startTurnTimer(state.id, currentTurnPlayerId.playerId);
+    // }
   }
 
   public initSetupTheGameState(
@@ -148,6 +155,7 @@ export class XOService extends BaseGameEngineService<LudoState> {
       return;
     }
     // select random move
+    console.log("AUUUUTOOOOOOOOOOOOOOOOOOOOOPLAAAAAAAAAAAAAYINNNNGGGGGGGGGGGGGGGGGGGGGG");
     const randomMove = state.LastTurn.move;
     const x = randomMove.xPos;
     const y = randomMove.yPos;
@@ -374,7 +382,8 @@ export class XOService extends BaseGameEngineService<LudoState> {
     // payload: PlayerActionCommandPRCPayload<any>,
     payload : any, 
   ): Promise<PlayerActionCommandPRCResponse> {
-    const { matchId, playerId, actionName, body } = payload;
+    const { matchId, playerId, actionName, data } = payload;
+    const error : string[] = []
     const state = this.games.get(matchId);
     if (!state) {
       console.log(matchId);
@@ -388,18 +397,21 @@ export class XOService extends BaseGameEngineService<LudoState> {
       throw new NotAcceptableException('It is not your turn');
     }
     // TODO check acceptable action
-    switch (actionName) {
-      case XO_UPDATE_TUNE: {
-        console.log("==========>;jawnvipanvjasvhbasdjgn", body);
-        const move : IMove = {
-          subBoard_id : body.subBoard_id,
-          xPos : body.xPos,
-          yPos : body.yPos,
-          turn : body.turn
-        }
-        await this.updateTune(state, move);
-        if (state.Conclusion !== 'RUNNING') {
-          await this.baseEndTheMatch(state.id);
+    if (error.length === 0){
+      switch (actionName) {
+        case XO_UPDATE_TUNE: {
+          console.log("==========>;jawnvipanvjasvhbasdjgn", data);
+          console.log(":::::::::::::::", payload)
+          const move : IMove = {
+            subBoard_id : data.subBoard_id,
+            xPos : data.xPos,
+            yPos : data.yPos,
+            turn : data.turn
+          }
+          await this.updateTune(state, move);
+          if (state.Conclusion !== 'RUNNING') {
+            await this.baseEndTheMatch(state.id);
+          }
         }
       }
     }

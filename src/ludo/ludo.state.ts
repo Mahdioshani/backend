@@ -63,31 +63,34 @@ export class LudoState extends GameEngineState<XOPlayerState> {
     return occupied === 'Z';
   }
 
-  private isValidTurn(position: IMove, player: XOPlayerState): boolean {
-    if (this?.LastTurn?.move?.turn === player?.turn_symbol) {
-      return false;
-    }
-    return true;
-  }
+  // private isValidTurn(position: IMove, player: XOPlayerState): boolean {
+  //   if (this?.LastTurn?.move?.turn === player?.turn_symbol) {
+  //     return false;
+  //   }
+  //   return true;
+  // }
 
   private isValidSubBoard(position: IMove): boolean {
-    if (!this.LastTurn) {
+    console.log("________\n______________\n", "we're here");
+    if (!this.LastTurn.playerId) {
       return true;
     }
     if (this.SubBoards[position.subBoard_id].status !== 'RUNNING') {
       return false;
     }
-    const x = this.LastTurn?.move?.xPos;
-    const y = this.LastTurn?.move?.yPos;
+    const x = this.LastTurn.move.xPos;
+    const y = this.LastTurn.move.yPos;
     const expectedSubBoard: number = x * 3 + y;
-    if (!expectedSubBoard){
+    
+    // if (!expectedSubBoard){
+    //   return true;
+    // }
+    console.log("\n\n\n\n\n", expectedSubBoard);
+    console.log("****************************************", this.SubBoards);
+    if (position.subBoard_id === expectedSubBoard) {
       return true;
     }
-    if (this.SubBoards[position.subBoard_id].id === expectedSubBoard) {
-      return true;
-    }
-    console.log(expectedSubBoard);
-    console.log(this.SubBoards);
+
     if (this.SubBoards[expectedSubBoard].status !== 'RUNNING') {
       return true;
     }
@@ -436,21 +439,22 @@ export class LudoState extends GameEngineState<XOPlayerState> {
   }
   public handleMove(move: IMove): {
     has_error: boolean;
-    error: string;
+    error: string[];
     playerId: number;
     updated_tables: XOSubBoard[];
     conclusion: boardStatus;
     move:IMove;
   } {
+    console.log("handlling move11111111111111111111111111111111111111111111111111111");
     const firstError: boolean = this.isPositionEmpty(move);
     const secondError: boolean = this.isValidSubBoard(move);
-    let error: string = '';
+    let error: string[] = [];
     const no_error: boolean = firstError && secondError;
     if (!firstError) {
-      error = 'The position is not empty';
+      error.push('The position is not empty');
     }
     if (!secondError) {
-      error = 'Invalid SubBoard';
+      error.push('Invalid SubBoard');
     }
     let this_playerId: number;
     if (no_error) {
@@ -460,6 +464,7 @@ export class LudoState extends GameEngineState<XOPlayerState> {
             this_playerId = this.players[i].playerId;
           }
         }
+
       }
     } else {
       if (move.turn === turn.O) {
@@ -473,10 +478,13 @@ export class LudoState extends GameEngineState<XOPlayerState> {
     }
     const x = move.xPos;
     const y = move.yPos;
-    this.SubBoards[move.subBoard_id].table[x][y] = move.turn;
-    this.checkSubBoardCondition(this.SubBoards[move.subBoard_id]);
-    this.checkMainBoardCondition();
-    this.LastTurn = { playerId: this_playerId, move: move };
+    if (no_error){
+      this.SubBoards[move.subBoard_id].table[x][y] = move.turn;
+      this.checkSubBoardCondition(this.SubBoards[move.subBoard_id]);
+      this.checkMainBoardCondition();
+      this.LastTurn = { playerId: this_playerId, move: move };
+      console.log("LASTTTTTTurrrnnnn::============================================: ", this.LastTurn);
+    }
 
     return {
       error: error,
