@@ -136,9 +136,9 @@ export class XOService extends BaseGameEngineService<LudoState> {
     this.publishServerEvent(state.id, GameEngineEventType.MATCH_EVENT, event);
 
     // Start the timer for the new turn
-    // if (!currentTurnPlayerId.has_error){
-    //   this.startTurnTimer(state.id, currentTurnPlayerId.playerId);
-    // }
+    if (!currentTurnPlayerId.has_error){
+      this.startTurnTimer(state.id, currentTurnPlayerId.playerId);
+    }
   }
 
   public initSetupTheGameState(
@@ -151,7 +151,7 @@ export class XOService extends BaseGameEngineService<LudoState> {
 
   public async autoPlay(matchId: string, playerId: number) {
     const state = this.games.get(matchId);
-    if (!state || state.LastTurn.playerId !== playerId) {
+    if (!state || state.LastTurn.playerId === playerId) {
       return;
     }
     // select random move
@@ -159,7 +159,7 @@ export class XOService extends BaseGameEngineService<LudoState> {
     const randomMove = state.LastTurn.move;
     const x = randomMove.xPos;
     const y = randomMove.yPos;
-    const sub_id = posToSubBoardId[x + ',' + y];
+    const sub_id = 3 * x + y;
     let move: IMove;
     let is_set: boolean = false;
     const temp_turn: turn =
