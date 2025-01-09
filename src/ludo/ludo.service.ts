@@ -394,7 +394,6 @@ export class XOService extends BaseGameEngineService<LudoState> {
     }
 
     if (state.LastTurn.playerId === playerId) {
-      console.log("mannn koskholam");
       throw new NotAcceptableException('It is not your turn');
     }
     // TODO check acceptable action
